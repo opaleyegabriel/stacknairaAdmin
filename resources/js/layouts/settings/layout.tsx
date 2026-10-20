@@ -9,26 +9,42 @@ import { show } from '@/routes/two-factor';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
 import { type PropsWithChildren } from 'react';
+import { route } from 'ziggy-js';
 
 const sidebarNavItems: NavItem[] = [
-    {
+    // {
+    //     title: 'Profile',
+    //     href: route(),
+    //     icon: null,
+    // },
+    // {
+    //     title: 'Password',
+    //     href: editPassword(),
+    //     icon: null,
+    // },
+    // // {
+    // //     title: 'Two-Factor Auth',
+    // //     href: show(),
+    // //     icon: null,
+    // // },
+    // {
+    //     title: 'Appearance',
+    //     href: editAppearance(),
+    //     icon: null,
+    // },
+     {
         title: 'Profile',
-        href: edit(),
+        href: route('profile.edit'),
         icon: null,
     },
     {
         title: 'Password',
-        href: editPassword(),
-        icon: null,
-    },
-    {
-        title: 'Two-Factor Auth',
-        href: show(),
+        href: route('password.edit'),
         icon: null,
     },
     {
         title: 'Appearance',
-        href: editAppearance(),
+        href: route('appearance'),
         icon: null,
     },
 ];
