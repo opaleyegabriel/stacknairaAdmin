@@ -2,7 +2,7 @@ import { Head, Link, router, usePage } from '@inertiajs/react'
 import { useEffect, useRef, useState } from 'react'
 import debounce from 'lodash/debounce'
 import { toast } from 'sonner'
-import { Search, Plus, User, Phone, Mail, Calendar, Building, Users, Eye, MoreHorizontal, Edit, Trash2, Filter, CreditCard, Wallet, Target, BadgeIcon, CheckCircle, XCircle, TrendingUp, Info, Lock, Banknote } from 'lucide-react'
+import { Search, Plus, User, Phone, Mail, Calendar, Building, Users, Eye, MoreHorizontal, Edit, Trash2, Filter, CreditCard, Wallet, Target, BadgeIcon, CheckCircle, XCircle, TrendingUp, Info, Lock, Banknote, KeyRound } from 'lucide-react'
 import AppLayout from '@/layouts/app-layout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -73,7 +73,6 @@ interface Props {
     status?: string
     category?: string
     registration?: string // Add registration filter
-
   }
   statusCounts: StatusCounts
   categoryCounts: CategoryCounts
@@ -91,7 +90,7 @@ interface Props {
   }
 }
 
-type EditMode = 'name' | 'email' | 'phone' | 'category' | 'account' | null
+type EditMode = 'name' | 'email' | 'phone' | 'category' | 'account' | 'reset_password' | null
 
 interface SetupForm {
   type: string
@@ -311,6 +310,9 @@ export default function MembersIndex({ members, filters, statusCounts, categoryC
             account_number: editForm.account_number
           }
           break
+        case 'reset_password':
+          // Reset password is handled by its own dedicated handler
+          return
       }
 
       await router.patch(route(routeName, editingMember.id), formData)
@@ -321,6 +323,32 @@ export default function MembersIndex({ members, filters, statusCounts, categoryC
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  // Reset password handler
+  const handleResetPassword = () => {
+    if (!editingMember) return
+
+    setIsSubmitting(true)
+
+    router.post(
+      route('members.reset-password', editingMember.id),
+      {},
+      {
+        preserveScroll: true,
+        onSuccess: () => {
+          toast.success(`Password for ${editingMember.name} has been reset successfully!`)
+          closeEditDialog()
+        },
+        onError: () => {
+          toast.error('Failed to reset password. Please try again.')
+          setIsSubmitting(false)
+        },
+        onFinish: () => {
+          setIsSubmitting(false)
+        },
+      }
+    )
   }
 
   // Check if member can edit phone (no category and no balances)
@@ -451,7 +479,6 @@ export default function MembersIndex({ members, filters, statusCounts, categoryC
         </div>
 
         {/* Filters Card */}
-        {/* Filters Card */}
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
@@ -510,7 +537,7 @@ export default function MembersIndex({ members, filters, statusCounts, categoryC
                 </Select>
               </div>
 
-              {/* Registration Status Filter - NEW */}
+              {/* Registration Status Filter */}
               <div className="space-y-2">
                 <label className="text-sm font-medium">Registration Status</label>
                 <Select value={registrationFilter} onValueChange={onRegistrationChange}>
@@ -721,6 +748,14 @@ export default function MembersIndex({ members, filters, statusCounts, categoryC
                               <DropdownMenuItem onClick={() => openEditDialog('account', member)}>
                                 <Banknote className="h-4 w-4 mr-2" />
                                 Edit Account Details
+                              </DropdownMenuItem>
+                            )}
+
+                            {/* Reset Password Option */}
+                            {can('reset_members_password') && (
+                              <DropdownMenuItem onClick={() => openEditDialog('reset_password', member)}>
+                                <KeyRound className="h-4 w-4 mr-2 text-amber-600" />
+                                Reset Password
                               </DropdownMenuItem>
                             )}
 
@@ -1060,6 +1095,61 @@ export default function MembersIndex({ members, filters, statusCounts, categoryC
             </Button>
             <Button onClick={handleEditSubmit} disabled={isSubmitting}>
               {isSubmitting ? 'Updating...' : 'Update Account Details'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={editMode === 'reset_password'} onOpenChange={(open) => !open && closeEditDialog()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reset Member Password</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to reset the password for {editingMember?.name}?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded">
+              <div className="flex items-start gap-2">
+                <Info className="h-4 w-4 text-amber-600 mt-0.5" />
+                <div className="text-sm text-amber-800">
+                  <strong>Warning:</strong> This will immediately reset the member's
+                  password. The member will be required to change it on their next
+                  login. This action cannot be undone.
+                </div>
+              </div>
+            </div>
+
+            {editingMember && (
+              <div className="space-y-2 p-3 bg-gray-50 rounded border">
+                <div className="flex items-center gap-2">
+                  <User className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-sm font-medium">{editingMember.name}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">{editingMember.email}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">{editingMember.mobile}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={closeEditDialog} disabled={isSubmitting}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleResetPassword}
+              disabled={isSubmitting}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              {isSubmitting ? 'Resetting...' : 'Reset Password'}
             </Button>
           </DialogFooter>
         </DialogContent>

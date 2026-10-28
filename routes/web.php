@@ -123,6 +123,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::patch('/members/{member}/update-account', [MemberController::class, 'updateAccount'])->name('members.update-account');
     });
 
+    // Reset member password (writes '123456' to tbl_members.pwd + sets must_change_password)
+    Route::middleware('permission:reset_members_password')->group(function () {
+        Route::post('/members/{member}/reset-password', [MemberController::class, 'resetPassword'])->name('members.reset-password');
+    });
+
     // ===========================
     // 🤝 Cooperative
     // ===========================

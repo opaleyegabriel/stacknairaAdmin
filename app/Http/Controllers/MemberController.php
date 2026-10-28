@@ -9,7 +9,9 @@ use App\Models\Referral;
 use App\Models\TrackRegistration;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class MemberController extends Controller
@@ -17,68 +19,11 @@ class MemberController extends Controller
     /**
      * Display a listing of members.
      */
-    // public function index(Request $request)
-    // {
-    //     $query = Member::query();
-
-    //     // Search filter
-    //     if ($search = $request->input('search')) {
-    //         $query->where(function ($q) use ($search) {
-    //             $q->where('name', 'like', "%{$search}%")
-    //             ->orWhere('email', 'like', "%{$search}%")
-    //             ->orWhere('mobile', 'like', "%{$search}%")
-    //             ->orWhere('account_number', 'like', "%{$search}%")
-    //             ->orWhere('bank_name', 'like', "%{$search}%");
-    //         });
-    //     }
-
-    //     // Status filter
-    //     if ($status = $request->input('status')) {
-    //         if ($status === 'active') {
-    //             $query->active();
-    //         } elseif ($status === 'inactive') {
-    //             $query->where('nstatus', 0);
-    //         }
-    //     }
-
-    //     // Category filter - FIXED: Proper variable usage
-    //     $category = $request->input('category');
-    //     if ($category && $category !== 'all') {
-    //         $query->where('category', $category);
-    //     }
-
-    //     $members = $query->withCount(['referralsMade', 'ajoMemberships'])
-    //                     ->orderBy('created_at', 'desc')
-    //                     ->paginate(20);
-
-    //     // Calculate counts for filters
-    //     $statusCounts = [
-    //         'all' => Member::count(),
-    //         'active' => Member::active()->count(),
-    //         'inactive' => Member::where('nstatus', 0)->count(),
-    //     ];
-
-    //     $categoryCounts = [
-    //         'all' => Member::count(),
-    //         'Category A' => Member::where('category', 'Category A')->count(),
-    //         'Category B' => Member::where('category', 'Category B')->count(),
-    //         'Category C' => Member::where('category', 'Category C')->count(),
-    //         'Category D' => Member::where('category', 'Category D')->count(),
-    //     ];
-
-    //     return Inertia::render('Members/Index', [
-    //         'members' => $members,
-    //         'filters' => $request->only(['search', 'status', 'category']),
-    //         'statusCounts' => $statusCounts,
-    //         'categoryCounts' => $categoryCounts,
-    //     ]);
-    // }
-
     public function index(Request $request)
     {
         // Get ALL mobile numbers that are fully registered
         $registeredMobileNumbers = TrackRegistration::pluck('mobile')->toArray();
-        
+
         $query = Member::query();
 
         // Search filter
@@ -107,14 +52,12 @@ class MemberController extends Controller
             $query->where('category', $category);
         }
 
-        // Registration status filter - NEW
+        // Registration status filter
         $registration = $request->input('registration');
         if ($registration && $registration !== 'all') {
             if ($registration === 'registered') {
-                // Get members who have completed registration
                 $query->whereIn('mobile', $registeredMobileNumbers);
             } elseif ($registration === 'pending') {
-                // Get members who haven't completed registration
                 $query->whereNotIn('mobile', $registeredMobileNumbers);
             }
         }
@@ -132,16 +75,16 @@ class MemberController extends Controller
 
         // Calculate counts for ALL members (not filtered)
         $allMembers = Member::all();
-        
+
         // Stats for ALL members
         $totalMembers = $allMembers->count();
         $activeMembers = $allMembers->where('nstatus', true)->count();
-        
+
         // Calculate ACTUAL total referrals from referrals table for ALL members
         $totalReferrals = Referral::count();
-        
+
         // Calculate total groups for ALL members
-        $totalGroups = $allMembers->sum(function($member) {
+        $totalGroups = $allMembers->sum(function ($member) {
             return is_numeric($member->ajo_memberships_count) ? $member->ajo_memberships_count : 0;
         });
 
@@ -172,10 +115,10 @@ class MemberController extends Controller
 
         return Inertia::render('Members/Index', [
             'members' => $members,
-            'filters' => $request->only(['search', 'status', 'category', 'registration']), // Add registration
+            'filters' => $request->only(['search', 'status', 'category', 'registration']),
             'statusCounts' => $statusCounts,
             'categoryCounts' => $categoryCounts,
-            'registrationCounts' => $registrationCounts, // Add this
+            'registrationCounts' => $registrationCounts,
             'stats' => [
                 'totalMembers' => $totalMembers,
                 'activeMembers' => $activeMembers,
@@ -186,7 +129,6 @@ class MemberController extends Controller
         ]);
     }
 
-    
     /**
      * Display the specified member.
      */
@@ -200,7 +142,7 @@ class MemberController extends Controller
             'referralsMade.referredMember',
             'referredBy.referrer',
             'contributionPlan',
-            'balances' => function($query) {
+            'balances' => function ($query) {
                 $query->orderBy('created_at', 'desc');
             },
             'ajoMemberships.group',
@@ -212,12 +154,12 @@ class MemberController extends Controller
         $balanceSummary = [
             'SHARES' => $member->total_shares,
             'SAVINGS' => $member->total_savings,
-            'SSAVINGS' => $member->balances->where('type', 'SSAVINGS')->sum('debit') - 
+            'SSAVINGS' => $member->balances->where('type', 'SSAVINGS')->sum('debit') -
                          $member->balances->where('type', 'SSAVINGS')->sum('credit'),
             'WALLET' => $member->wallet_balance,
-            'BUILDING' => $member->balances->where('type', 'BUILDING')->sum('debit') - 
+            'BUILDING' => $member->balances->where('type', 'BUILDING')->sum('debit') -
                          $member->balances->where('type', 'BUILDING')->sum('credit'),
-            'AJO' => $member->balances->where('type', 'AJO')->sum('debit') - 
+            'AJO' => $member->balances->where('type', 'AJO')->sum('debit') -
                          $member->balances->where('type', 'AJO')->sum('credit'),
         ];
 
@@ -254,7 +196,7 @@ class MemberController extends Controller
     {
         $member = Member::findOrFail($id);
 
-        $groups = $member->ajoMemberships()->with(['group' => function($query) {
+        $groups = $member->ajoMemberships()->with(['group' => function ($query) {
             $query->select('id', 'group_name', 'amount', 'status', 'current_round');
         }])->get();
 
@@ -275,41 +217,13 @@ class MemberController extends Controller
         $member->update(['nstatus' => $request->nstatus]);
 
         $status = $request->nstatus ? 'activated' : 'deactivated';
-        
+
         return redirect()->route('members.index', $id)->with('message', "Member {$status} successfully!");
     }
 
     /**
      * Update member photo with loading state and redirect response
      */
-    // public function updatePhoto(Request $request, $id)
-    // {
-    //     $request->validate([
-    //         'photo' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',
-    //     ]);
-
-    //     $member = Member::findOrFail($id);
-
-    //     try {
-    //         // Delete old photo if exists
-    //         if ($member->photo && Storage::exists('member-photos/' . $member->photo)) {
-    //             Storage::delete('member-photos/' . $member->photo);
-    //         }
-
-    //         // Store new photo
-    //         $photoPath = $request->file('photo')->store('member-photos', 'public');
-    //         $photoName = basename($photoPath);
-
-    //         $member->update(['photo' => $photoName]);
-
-    //         return redirect()->route('members.show', $id)->with('message', 'Photo updated successfully!');
-
-    //     } catch (\Exception $e) {
-    //         \Log::error('Photo upload failed: ' . $e->getMessage());
-            
-    //         return redirect()->route('members.show', $id)->with('error', 'Failed to upload photo. Please try again.');
-    //     }
-    // }
     public function updatePhoto(Request $request, $id)
     {
         $request->validate([
@@ -321,7 +235,7 @@ class MemberController extends Controller
         try {
             // Use base_path() to get the root directory of your Laravel app
             $uploadDirectory = base_path('storage/member-photos');
-            
+
             // Ensure the directory exists
             if (!file_exists($uploadDirectory)) {
                 mkdir($uploadDirectory, 0755, true);
@@ -335,15 +249,12 @@ class MemberController extends Controller
             // Store new photo with unique name
             $photoFile = $request->file('photo');
             $photoName = time() . '_' . uniqid() . '.' . $photoFile->getClientOriginalExtension();
-            
+
             // Move the file to the correct directory
             $photoFile->move($uploadDirectory, $photoName);
 
             // Update member record
             $member->update(['photo' => $photoName]);
-
-            // \Log::info('Photo stored at: ' . $uploadDirectory . '/' . $photoName);
-            // \Log::info('Photo accessible at: https://hoog.ng/StackNaira-app/StackNaira/storage/member-photos/' . $photoName);
 
             return redirect()->route('members.show', $id)->with('success', 'Photo updated successfully!');
 
@@ -352,6 +263,7 @@ class MemberController extends Controller
             return redirect()->route('members.show', $id)->with('error', 'Failed to upload photo.');
         }
     }
+
     /**
      * Show statement preview page
      */
@@ -395,11 +307,10 @@ class MemberController extends Controller
         try {
             // Define the photo path based on your current storage location
             $photoPath = base_path('storage/member-photos/' . $member->photo);
-            
+
             // Delete the photo file if it exists
             if ($member->photo && file_exists($photoPath)) {
                 unlink($photoPath);
-                // \Log::info('Photo deleted from: ' . $photoPath);
             }
 
             // Update member record to remove photo reference
@@ -408,12 +319,10 @@ class MemberController extends Controller
             return redirect()->route('members.show', $id)->with('success', 'Photo removed successfully!');
 
         } catch (\Exception $e) {
-            // \Log::error('Photo removal failed: ' . $e->getMessage());
-            // \Log::error('Photo path attempted: ' . ($photoPath ?? 'Not set'));
-            
             return redirect()->route('members.show', $id)->with('error', 'Failed to remove photo. Please try again.');
         }
     }
+
     /**
      * Generate statement PDF
      */
@@ -478,7 +387,6 @@ class MemberController extends Controller
         return response()->json($statementData);
     }
 
-    // In MemberController.php
     public function updateName(Request $request, $id)
     {
         $member = Member::findOrFail($id);
@@ -523,12 +431,11 @@ class MemberController extends Controller
         return redirect()->back()->with('message', 'Phone number updated successfully!');
     }
 
-
     public function getSetups($id)
     {
         $member = Member::findOrFail($id);
         $setups = $member->setups()->get();
-        
+
         return response()->json($setups);
     }
 
@@ -546,7 +453,7 @@ class MemberController extends Controller
         try {
             // Update member category
             $member->update(['category' => $request->category]);
-            
+
             // Update or create setups
             $this->updateOrCreateSetups($member->mobile, $request->setups);
 
@@ -573,6 +480,7 @@ class MemberController extends Controller
             );
         }
     }
+
     public function updateAccount(Request $request, $id)
     {
         $member = Member::findOrFail($id);
@@ -594,4 +502,28 @@ class MemberController extends Controller
             return redirect()->back()->with('error', 'Failed to update account details: ' . $e->getMessage());
         }
     }
+
+            /**
+         * Reset member password.
+         *
+         * Writes the literal string '123456' to tbl_members.pwd and sets
+         * must_change_password = true. The password is consumed by the external
+         * mobile API — not Laravel's auth — so no hashing is applied.
+         */
+        public function resetPassword($id)
+        {
+            $member = Member::findOrFail($id);
+
+            try {
+                $member->update([
+                    'pwd'                  => '123456',
+                    'must_change_password' => true,
+                ]);
+
+                return redirect()->back()->with('message', 'Password reset to 123456 successfully!');
+
+            } catch (\Exception $e) {
+                return redirect()->back()->with('error', 'Failed to reset password: ' . $e->getMessage());
+            }
+        }
 }

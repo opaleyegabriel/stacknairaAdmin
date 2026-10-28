@@ -30,6 +30,7 @@ class Member extends Model
         'account_name',
         'account_number',
         'nstatus',
+        'must_change_password',
         'cooperator',
         'photo',
         'created_at'
